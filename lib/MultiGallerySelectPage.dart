@@ -22,13 +22,11 @@ class _MultiGallerySelectPageState extends State<MultiGallerySelectPage> with Wi
 
   var _selectedItems = List<GalleryImage>();
   var _itemCache = Map<int, GalleryImage>();
-  var _memeCache = Map<int, GalleryImage>();
-  var _resultsCache = Map<int, dynamic>();
 
   final TextRecognizer _textRecognizer = FirebaseVision.instance.textRecognizer();
 
   _selectItem(int index) async {
-    var galleryImage = await _getItem(index, false);
+    var galleryImage = await _getItem(index, meme:false);
 
     setState(() {
       if (_isSelected(galleryImage.id)) {
@@ -99,7 +97,24 @@ class _MultiGallerySelectPageState extends State<MultiGallerySelectPage> with Wi
     }
   }
 
-  Future<GalleryImage> _getItem(int index, bool meme) async {
+  Future<Size> _getImageSize(GalleryImage item) async {
+    final Completer<Size> completer = Completer<Size>();
+
+    final Image image = Image.memory(item.bytes);
+    image.image.resolve(const ImageConfiguration()).addListener(
+      ImageStreamListener((ImageInfo info, bool _) {
+        completer.complete(Size(
+          info.image.width.toDouble(),
+          info.image.height.toDouble(),
+        ));
+      }),
+    );
+
+    final Size imageSize = await completer.future;
+    return imageSize;
+  }
+
+  Future<GalleryImage> _getItem(int index, {bool meme}) async {
     //bool meme determines if entire cameraroll is returned, or if just the memes get sent back
     if (!meme && _itemCache[index] != null && _itemCache[index].meme == false) {
       return _itemCache[index];
@@ -117,6 +132,10 @@ class _MultiGallerySelectPageState extends State<MultiGallerySelectPage> with Wi
           location: item['location'],
           meme: false);
 
+      var itemSize = _getImageSize(galleryImage);
+
+      galleryImage.size = itemSize;
+
       _itemCache[index] = galleryImage;
 
       dynamic scan = _scanImage(galleryImage, index);
@@ -126,26 +145,10 @@ class _MultiGallerySelectPageState extends State<MultiGallerySelectPage> with Wi
         galleryImage.scanResults = scan;
         galleryImage.meme = true;
       }
-
       return galleryImage;
+
+
     }
-  }
-
-  Future<Size> _getImageSize(GalleryImage item) async {
-    final Completer<Size> completer = Completer<Size>();
-
-    final Image image = Image.memory(item.bytes);
-    image.image.resolve(const ImageConfiguration()).addListener(
-      ImageStreamListener((ImageInfo info, bool _) {
-        completer.complete(Size(
-          info.image.width.toDouble(),
-          info.image.height.toDouble(),
-        ));
-      }),
-    );
-
-    final Size imageSize = await completer.future;
-    return imageSize;
   }
 
   Future<dynamic> _scanImage(GalleryImage item,int indx) async{
@@ -231,25 +234,25 @@ class _MultiGallerySelectPageState extends State<MultiGallerySelectPage> with Wi
 
   _buildItem(int index) => GestureDetector(
       onTap: ()  {
-        Future<GalleryImage> _image = _getItem(index, false);
         showDialog(context: context,
         builder: (BuildContext context){
           return AlertDialog(
             title: Text("Photo"),
             content:FutureBuilder(
-                future: _getItem(index, false),
+                future: _getItem(index, meme:false),
                 builder: (context, snapshot) {
                   var item = snapshot?.data;
                   if (item != null) {
                     return Container(
-                      child: Image.memory(item.bytes, fit: BoxFit.cover),
+                      //child: Image.memory(item.bytes, fit: BoxFit.cover),
                       decoration: BoxDecoration(
                           border: Border.all(
                               color: Theme.of(context).primaryColor,
                               width: 2,
                               style: _isSelected(item.id)
                                   ? BorderStyle.solid
-                                  : BorderStyle.none)),
+                                  : BorderStyle.none)
+                          ),
                     );
                   }
                   return Container();
@@ -261,13 +264,17 @@ class _MultiGallerySelectPageState extends State<MultiGallerySelectPage> with Wi
       child: Card(
         elevation: 2.0,
         child: FutureBuilder(
-            future: _getItem(index, false),
+            future: _getItem(index, meme:false),
             builder: (context, snapshot) {
               var item = snapshot?.data;
               if (item != null) {
                 return Container(
                   child: Image.memory(item.bytes, fit: BoxFit.cover),
                   decoration: BoxDecoration(
+                      image: DecorationImage(
+                        image: Image.memory(item.bytes).image,
+                        fit: BoxFit.fill,
+                      ),
                       border: Border.all(
                           color: Theme.of(context).primaryColor,
                           width: 2,
@@ -282,12 +289,37 @@ class _MultiGallerySelectPageState extends State<MultiGallerySelectPage> with Wi
 
   _buildMeme(int index) => GestureDetector(
       onTap: () {
-        _selectItem(index);
-      },
+          Future<GalleryImage> _image = _getItem(index, meme:true);
+          showDialog(context: context,
+              builder: (BuildContext context){
+                return AlertDialog(
+                  title: Text("Photo"),
+                  content:FutureBuilder(
+                      future: _getItem(index, meme:true),
+                      builder: (context, snapshot) {
+                        var item = snapshot?.data;
+                        if (item != null) {
+                          return Container(
+                            child: Image.memory(item.bytes, fit: BoxFit.cover),
+                            decoration: BoxDecoration(
+                                border: Border.all(
+                                    color: Theme.of(context).primaryColor,
+                                    width: 2,
+                                    style: _isSelected(item.id)
+                                        ? BorderStyle.solid
+                                        : BorderStyle.none)),
+                          );
+                        }
+                        return Container();
+                      }),
+                );
+              }
+          );
+        },
       child: Card(
         elevation: 2.0,
         child: FutureBuilder(
-            future: _getItem(index,true),
+            future: _getItem(index, meme:true),
             builder: (context, snapshot) {
               var item = snapshot?.data;
               if (item != null) {
@@ -327,7 +359,6 @@ class _MultiGallerySelectPageState extends State<MultiGallerySelectPage> with Wi
                     itemCount: _numberOfItems,
                     scrollDirection: Axis.horizontal,
                     itemBuilder: (context, index) {
-                      print("About to call build item \n");
                       return _buildItem(index);
                     }),
               ),

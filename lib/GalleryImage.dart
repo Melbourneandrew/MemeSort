@@ -36,12 +36,15 @@ class GalleryImage {
   String id;
   int dateCreated;
   String location;
+  dynamic size;
 
   //Scan Data
+  dynamic paint;
   dynamic scanResults;
   bool scanned;
   bool meme;
 
 
-  GalleryImage({this.bytes, this.id, this.dateCreated, this.location, this.scanResults, this.scanned, this.meme});
+
+  GalleryImage({this.bytes, this.id, this.dateCreated, this.location, this.size, this.paint, this.scanResults, this.scanned, this.meme});
 }
